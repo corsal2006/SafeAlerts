@@ -1,10 +1,6 @@
 # 🛡️ SafeAlerts — SMS Emergency Alert System
 
 <p align="center">
-  <img src="screenshots/home.png" alt="SafeAlerts Home Screen" width="280">
-</p>
-
-<p align="center">
   <strong>Stay Safe. Stay Connected.</strong><br>
   A native Android emergency alert application for quickly notifying trusted contacts through SMS with the user's location.
 </p>
