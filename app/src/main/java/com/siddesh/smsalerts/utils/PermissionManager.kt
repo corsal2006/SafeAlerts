@@ -58,11 +58,113 @@ object PermissionManager {
         return ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
     }
 
-    fun openAppSettings(context: Context) {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+    fun getAllRequiredPermissions(): List<String> {
+        val permissions = mutableListOf(
+            PERMISSION_FINE_LOCATION,
+            PERMISSION_COARSE_LOCATION,
+            PERMISSION_SEND_SMS,
+            PERMISSION_READ_CONTACTS,
+            PERMISSION_RECORD_AUDIO
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        return permissions
+    }
+
+    fun hasCoreEmergencyPermissions(context: Context): Boolean {
+        return hasLocationPermission(context) && hasSmsPermission(context)
+    }
+
+    fun hasAllRequiredPermissions(context: Context): Boolean {
+        val hasLoc = hasLocationPermission(context)
+        val hasSms = hasSmsPermission(context)
+        val hasContacts = hasContactsPermission(context)
+        val hasAudio = hasRecordAudioPermission(context)
+        val hasNotifications = hasNotificationPermission(context)
+        return hasLoc && hasSms && hasContacts && hasAudio && hasNotifications
+    }
+
+    fun getMissingPermissions(context: Context): List<String> {
+        return getAllRequiredPermissions().filter { !hasPermission(context, it) }
+    }
+
+    data class AppPermissionInfo(
+        val permission: String,
+        val title: String,
+        val description: String,
+        val isGranted: Boolean,
+        val isEssential: Boolean
+    )
+
+    fun getPermissionDescriptors(context: Context): List<AppPermissionInfo> {
+        val list = mutableListOf(
+            AppPermissionInfo(
+                permission = PERMISSION_FINE_LOCATION,
+                title = "GPS Location (Precise & Coarse)",
+                description = "Acquires real-time coordinates and generates a Google Maps link in your emergency alert SMS.",
+                isGranted = hasLocationPermission(context),
+                isEssential = true
+            ),
+            AppPermissionInfo(
+                permission = PERMISSION_SEND_SMS,
+                title = "Direct Emergency SMS",
+                description = "Automatically sends emergency alerts directly via cellular network without requiring Internet.",
+                isGranted = hasSmsPermission(context),
+                isEssential = true
+            ),
+            AppPermissionInfo(
+                permission = PERMISSION_READ_CONTACTS,
+                title = "Read Contacts",
+                description = "Allows selecting and importing trusted emergency contacts from your phone address book.",
+                isGranted = hasContactsPermission(context),
+                isEssential = false
+            )
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            list.add(
+                AppPermissionInfo(
+                    permission = Manifest.permission.POST_NOTIFICATIONS,
+                    title = "Safety Notifications",
+                    description = "Alerts you regarding safety check-in status, background protection, and emergency delivery.",
+                    isGranted = hasNotificationPermission(context),
+                    isEssential = false
+                )
+            )
+        }
+
+        list.add(
+            AppPermissionInfo(
+                permission = PERMISSION_RECORD_AUDIO,
+                title = "Microphone (Voice Emergency)",
+                description = "Enables hands-free emergency dispatch when you say 'HELP'. Audio is processed only on-device.",
+                isGranted = hasRecordAudioPermission(context),
+                isEssential = false
+            )
+        )
+
+        return list
+    }
+
+    fun createAppSettingsIntent(context: Context): Intent {
+        return Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.fromParts("package", context.packageName, null)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(intent)
+    }
+
+    fun createLocationSettingsIntent(): Intent {
+        return Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+
+    fun openAppSettings(context: Context) {
+        context.startActivity(createAppSettingsIntent(context))
+    }
+
+    fun openLocationSettings(context: Context) {
+        context.startActivity(createLocationSettingsIntent())
     }
 }

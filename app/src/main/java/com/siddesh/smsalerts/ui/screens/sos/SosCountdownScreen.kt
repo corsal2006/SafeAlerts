@@ -662,6 +662,19 @@ private fun DispatchErrorView(
         Spacer(modifier = Modifier.height(28.dp))
 
         if (errorStage.fallbackIntent != null) {
+            val isLocationIntent = errorStage.fallbackIntent.action == android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS
+            val isSettingsIntent = errorStage.fallbackIntent.action == android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+            val buttonText = when {
+                isLocationIntent -> "ENABLE LOCATION IN SETTINGS"
+                isSettingsIntent -> "OPEN APP SETTINGS"
+                else -> "OPEN SYSTEM SMS APP"
+            }
+            val buttonIcon = when {
+                isLocationIntent -> Icons.Default.MyLocation
+                isSettingsIntent -> Icons.Default.Refresh
+                else -> Icons.AutoMirrored.Filled.Message
+            }
+
             Button(
                 onClick = { onOpenFallbackSms(errorStage.fallbackIntent) },
                 modifier = Modifier
@@ -670,10 +683,10 @@ private fun DispatchErrorView(
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = EmergencyRed)
             ) {
-                Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null)
+                Icon(buttonIcon, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "OPEN SYSTEM SMS APP",
+                    text = buttonText,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )

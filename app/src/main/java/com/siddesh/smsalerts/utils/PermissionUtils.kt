@@ -7,34 +7,24 @@ import androidx.core.content.ContextCompat
 
 object PermissionUtils {
 
-    val REQUIRED_PERMISSIONS = arrayOf(
-        Manifest.permission.SEND_SMS,
-        Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.ACCESS_COARSE_LOCATION
-    )
+    val REQUIRED_PERMISSIONS: Array<String>
+        get() = PermissionManager.getAllRequiredPermissions().toTypedArray()
 
-    fun hasPermission(context: Context, permission: String): Boolean {
-        return ContextCompat.checkSelfPermission(
-            context,
-            permission
-        ) == PackageManager.PERMISSION_GRANTED
-    }
+    fun hasPermission(context: Context, permission: String): Boolean =
+        PermissionManager.hasPermission(context, permission)
 
-    fun hasAllRequiredPermissions(context: Context): Boolean {
-        val sms = hasPermission(context, Manifest.permission.SEND_SMS)
-        val location = hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
-                hasPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
-        return sms && location
-    }
+    fun hasAllRequiredPermissions(context: Context): Boolean =
+        PermissionManager.hasAllRequiredPermissions(context)
 
     fun isSmsGranted(context: Context): Boolean =
-        hasPermission(context, Manifest.permission.SEND_SMS)
+        PermissionManager.hasSmsPermission(context)
 
-    fun hasSmsPermission(context: Context): Boolean = isSmsGranted(context)
+    fun hasSmsPermission(context: Context): Boolean =
+        PermissionManager.hasSmsPermission(context)
 
     fun isLocationGranted(context: Context): Boolean =
-        hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ||
-                hasPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+        PermissionManager.hasLocationPermission(context)
 
-    fun hasLocationPermission(context: Context): Boolean = isLocationGranted(context)
+    fun hasLocationPermission(context: Context): Boolean =
+        PermissionManager.hasLocationPermission(context)
 }

@@ -94,6 +94,17 @@ class EmergencyManager private constructor(private val context: Context) {
         countdownJob?.cancel()
         dispatchJob?.cancel()
 
+        if (countdownSeconds <= 0) {
+            dispatchJob = scope.launch {
+                executeDispatch(
+                    triggerSource = triggerSource,
+                    emergencyType = emergencyType,
+                    customMessage = customMessage
+                )
+            }
+            return
+        }
+
         countdownJob = scope.launch {
             for (sec in countdownSeconds downTo 1) {
                 _stage.value = SosStage.Countdown(sec)
@@ -232,34 +243,63 @@ class EmergencyManager private constructor(private val context: Context) {
                 return
             }
 
-            // 2. Acquire current GPS location
+            // 2. Verify SEND_SMS permission upfront
+            if (!smsSender.hasSmsPermission()) {
+                Log.w(TAG, "EMERGENCY_HALTED: SEND_SMS permission is not granted")
+                _stage.value = SosStage.Error(
+                    reason = "SMS permission (SEND_SMS) is required to automatically send emergency alerts. Please grant SMS permission in App Settings.",
+                    canRetry = true,
+                    fallbackIntent = com.siddesh.smsalerts.utils.PermissionManager.createAppSettingsIntent(context)
+                )
+                HapticUtils.vibrateError(context)
+                return
+            }
+
+            // 3. Acquire current GPS location (waiting for valid location, never fake/null)
             _stage.value = SosStage.AcquiringLocation
             var latitude: Double? = null
             var longitude: Double? = null
             var mapsUrl: String? = null
 
-            when (val locResult = locationService.getCurrentLocation(timeoutMs = 7000L)) {
+            when (val locResult = locationService.getCurrentLocation(timeoutMs = 10000L)) {
                 is LocationResult.Success -> {
                     latitude = locResult.latitude
                     longitude = locResult.longitude
                     mapsUrl = "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude"
-                    Log.d(TAG, "LOCATION_SUCCESS: lat=$latitude, lon=$longitude")
-                }
-                is LocationResult.PermissionDenied -> {
-                    mapsUrl = null
-                    Log.w(TAG, "LOCATION_PERMISSION_DENIED")
+                    Log.d(TAG, "LOCATION_SUCCESS: coordinates acquired successfully")
                 }
                 is LocationResult.GpsDisabled -> {
-                    mapsUrl = null
-                    Log.w(TAG, "LOCATION_GPS_DISABLED")
+                    Log.w(TAG, "EMERGENCY_HALTED: GPS is disabled on device")
+                    _stage.value = SosStage.Error(
+                        reason = "Location/GPS is disabled on your device. Please turn on Location in Settings so your emergency coordinates can be attached.",
+                        canRetry = true,
+                        fallbackIntent = com.siddesh.smsalerts.utils.PermissionManager.createLocationSettingsIntent()
+                    )
+                    HapticUtils.vibrateError(context)
+                    return
+                }
+                is LocationResult.PermissionDenied -> {
+                    Log.w(TAG, "EMERGENCY_HALTED: Location permission denied")
+                    _stage.value = SosStage.Error(
+                        reason = "Location permission is required to acquire your emergency coordinates. Please grant location permission in App Settings.",
+                        canRetry = true,
+                        fallbackIntent = com.siddesh.smsalerts.utils.PermissionManager.createAppSettingsIntent(context)
+                    )
+                    HapticUtils.vibrateError(context)
+                    return
                 }
                 is LocationResult.Unavailable -> {
-                    mapsUrl = null
-                    Log.w(TAG, "LOCATION_UNAVAILABLE: ${locResult.reason}")
+                    Log.w(TAG, "EMERGENCY_HALTED: Location unavailable: ${locResult.reason}")
+                    _stage.value = SosStage.Error(
+                        reason = "Unable to acquire an accurate GPS location fix (${locResult.reason}). Please ensure you have satellite reception and retry.",
+                        canRetry = true
+                    )
+                    HapticUtils.vibrateError(context)
+                    return
                 }
             }
 
-            // 3. Format emergency message with user name and location
+            // 4. Format emergency message with user name and location
             _stage.value = SosStage.TransmittingSms
             val userName = userRepository.userProfile.value?.let {
                 if (it.fullName.isNotBlank()) it.fullName else it.name

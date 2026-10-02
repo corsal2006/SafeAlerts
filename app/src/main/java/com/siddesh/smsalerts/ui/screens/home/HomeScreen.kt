@@ -54,7 +54,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.siddesh.smsalerts.ui.components.EmergencyPermissionDialog
+import com.siddesh.smsalerts.utils.PermissionManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -147,8 +154,42 @@ fun HomeScreen(
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var showPermissionSetupDialog by remember {
+        mutableStateOf(!PermissionManager.hasAllRequiredPermissions(context))
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                homeViewModel.refreshDashboard()
+                if (PermissionManager.hasAllRequiredPermissions(context)) {
+                    showPermissionSetupDialog = false
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     LaunchedEffect(Unit) {
         homeViewModel.refreshDashboard()
+    }
+
+    if (showPermissionSetupDialog) {
+        EmergencyPermissionDialog(
+            onDismiss = {
+                showPermissionSetupDialog = false
+            },
+            onPermissionsUpdated = {
+                homeViewModel.refreshDashboard()
+                if (PermissionManager.hasAllRequiredPermissions(context)) {
+                    showPermissionSetupDialog = false
+                }
+            }
+        )
     }
 
     Column(
@@ -255,19 +296,22 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // SECTION 2: MAIN VISIBLE "EMERGENCY ALERT" BUTTON
-            // When tapped, opens Emergency Type selection
             SosButton(
                 size = 205.dp,
                 requireHold = requireHold,
                 onSosTriggered = {
-                    onNavigateToEmergencyType()
+                    if (PermissionManager.hasCoreEmergencyPermissions(context)) {
+                        onNavigateToCountdown("EMERGENCY", "BUTTON")
+                    } else {
+                        showPermissionSetupDialog = true
+                    }
                 }
             )
 
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
-                text = "Tap to choose emergency category & review alert",
+                text = if (requireHold) "Hold 2 seconds for instant emergency alert" else "Tap for instant emergency alert",
                 fontSize = 12.sp,
                 color = TextSecondary
             )
